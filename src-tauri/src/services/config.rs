@@ -1,0 +1,145 @@
+use super::provider::sanitize_claude_settings_for_live;
+use crate::app_config::{AppType, MultiAppConfig};
+use crate::error::AppError;
+use crate::provider::Provider;
+use chrono::Utc;
+use std::fs;
+use std::path::Path;
+
+const MAX_BACKUPS: usize = 10;
+
+pub struct ConfigService;
+
+impl ConfigService {
+    pub fn create_backup(config_path: &Path) -> Result<String, AppError> {
+        if !config_path.exists() {
+            return Ok(String::new());
+        }
+
+        let timestamp = Utc::now().format("%Y%m%d_%H%M%S");
+        let backup_id = format!("backup_{timestamp}");
+
+        let backup_dir = config_path
+            .parent()
+            .ok_or_else(|| AppError::Config("Invalid config path".into()))?
+            .join("backups");
+
+        fs::create_dir_all(&backup_dir).map_err(|e| AppError::io(&backup_dir, e))?;
+
+        let backup_path = backup_dir.join(format!("{backup_id}.json"));
+        let contents = fs::read(config_path).map_err(|e| AppError::io(config_path, e))?;
+        fs::write(&backup_path, contents).map_err(|e| AppError::io(&backup_path, e))?;
+
+        Self::cleanup_old_backups(&backup_dir, MAX_BACKUPS)?;
+
+        Ok(backup_id)
+    }
+
+    fn cleanup_old_backups(backup_dir: &Path, retain: usize) -> Result<(), AppError> {
+        if retain == 0 {
+            return Ok(());
+        }
+
+        let entries = match fs::read_dir(backup_dir) {
+            Ok(iter) => iter
+                .filter_map(|entry| entry.ok())
+                .filter(|entry| {
+                    entry
+                        .path()
+                        .extension()
+                        .map(|ext| ext == "json")
+                        .unwrap_or(false)
+                })
+                .collect::<Vec<_>>(),
+            Err(_) => return Ok(()),
+        };
+
+        if entries.len() <= retain {
+            return Ok(());
+        }
+
+        let remove_count = entries.len().saturating_sub(retain);
+        let mut sorted = entries;
+
+        sorted.sort_by(|a, b| {
+            let a_time = a.metadata().and_then(|m| m.modified()).ok();
+            let b_time = b.metadata().and_then(|m| m.modified()).ok();
+            a_time.cmp(&b_time)
+        });
+
+        for entry in sorted.into_iter().take(remove_count) {
+            if let Err(err) = fs::remove_file(entry.path()) {
+                log::warn!(
+                    "Failed to remove old backup {}: {}",
+                    entry.path().display(),
+                    err
+                );
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn sync_current_providers_to_live(config: &mut MultiAppConfig) -> Result<(), AppError> {
+        Self::sync_current_provider_for_app(config, &AppType::Claude)
+    }
+
+    fn sync_current_provider_for_app(
+        config: &mut MultiAppConfig,
+        app_type: &AppType,
+    ) -> Result<(), AppError> {
+        let (current_id, provider) = {
+            let manager = match config.get_manager(app_type) {
+                Some(manager) => manager,
+                None => return Ok(()),
+            };
+
+            if manager.current.is_empty() {
+                return Ok(());
+            }
+
+            let current_id = manager.current.clone();
+            let provider = match manager.providers.get(&current_id) {
+                Some(provider) => provider.clone(),
+                None => {
+                    log::warn!(
+                        "当前应用 {app_type:?} 的供应商 {current_id} 不存在，跳过 live 同步"
+                    );
+                    return Ok(());
+                }
+            };
+            (current_id, provider)
+        };
+
+        match app_type {
+            AppType::Claude => Self::sync_claude_live(config, &current_id, &provider)?,
+        }
+
+        Ok(())
+    }
+
+    fn sync_claude_live(
+        config: &mut MultiAppConfig,
+        provider_id: &str,
+        provider: &Provider,
+    ) -> Result<(), AppError> {
+        use crate::config::{read_json_file, write_json_file};
+
+        let settings_path = crate::config::get_claude_settings_path();
+        if let Some(parent) = settings_path.parent() {
+            fs::create_dir_all(parent).map_err(|e| AppError::io(parent, e))?;
+        }
+
+        let settings = sanitize_claude_settings_for_live(&provider.settings_config);
+        write_json_file(&settings_path, &settings)?;
+
+        let live_after = read_json_file::<serde_json::Value>(&settings_path)?;
+        if let Some(manager) = config.get_manager_mut(&AppType::Claude) {
+            if let Some(target) = manager.providers.get_mut(provider_id) {
+                target.settings_config = live_after;
+            }
+        }
+
+        Ok(())
+    }
+}
