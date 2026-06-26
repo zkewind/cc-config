@@ -246,6 +246,23 @@ impl JsonStore {
         self.set_setting("log_config", &json)
     }
 
+    // ─── 当前选中项目作用域（供托盘同步前端选中态） ─────────────────────────
+
+    const CURRENT_PROJECT_SCOPE_KEY: &'static str = "current_project_scope";
+
+    pub fn get_current_project_scope(&self) -> Result<Option<String>, AppError> {
+        self.get_setting(Self::CURRENT_PROJECT_SCOPE_KEY)
+    }
+
+    pub fn set_current_project_scope(&self, path: Option<&str>) -> Result<(), AppError> {
+        match path {
+            Some(p) if !p.trim().is_empty() => {
+                self.set_setting(Self::CURRENT_PROJECT_SCOPE_KEY, p.trim())
+            }
+            _ => self.delete_setting(Self::CURRENT_PROJECT_SCOPE_KEY),
+        }
+    }
+
     // ─── 托管项目路径 ─────────────────────────────────────────────────────────
 
     const MANAGED_PROJECT_PATHS_KEY: &'static str = "managed_project_paths";
