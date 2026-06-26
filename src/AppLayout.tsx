@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
@@ -25,7 +25,12 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { Provider } from "@/types";
 import type { EnvConflict } from "@/types/env";
 import { useProvidersQuery, useSettingsQuery } from "@/lib/query";
-import { providersApi, settingsApi, type ProviderSwitchEvent } from "@/lib/api";
+import {
+  providersApi,
+  projectsApi,
+  settingsApi,
+  type ProviderSwitchEvent,
+} from "@/lib/api";
 import { checkAllEnvConflicts, checkEnvConflicts } from "@/lib/api/env";
 import { useProviderActions } from "@/hooks/useProviderActions";
 import { useLastValidValue } from "@/hooks/useLastValidValue";
@@ -85,6 +90,13 @@ export function AppLayout() {
   const [isWindowMaximized, setIsWindowMaximized] = useState(false);
   const [projectScope, setProjectScope] = useState<ProjectScope>("user");
   const [projectCurrentProviderId, setProjectCurrentProviderId] = useState("");
+
+  // 切换项目作用域时同步到后端，供托盘菜单构建「当前项目」区块读取。
+  // set_current_project_scope 命令内部已刷新托盘，无需另发事件。
+  const handleScopeChange = useCallback((scope: ProjectScope) => {
+    setProjectScope(scope);
+    void projectsApi.setCurrentProjectScope(scope === "user" ? null : scope);
+  }, []);
   const [leftWidth, setLeftWidth] = useState(240);
   const [editingProvider, setEditingProvider] = useState<Provider | null>(null);
   const [usageProvider, setUsageProvider] = useState<Provider | null>(null);
@@ -226,6 +238,43 @@ export function AppLayout() {
       unsubscribe?.();
     };
   }, [queryClient, t]);
+
+  // 托盘切换当前项目供应商后，同步高亮（仅当事件命中所选项目）。
+  useEffect(() => {
+    if (projectScope === "user") return;
+    let unsubscribe: (() => void) | undefined;
+    let active = true;
+
+    const setupListener = async () => {
+      try {
+        const off = await listen<{ projectPath: string; providerId: string }>(
+          "project-provider-switched",
+          (event) => {
+            const { projectPath, providerId } = event.payload ?? {};
+            if (projectPath === projectScope) {
+              setProjectCurrentProviderId(providerId ?? "");
+            }
+          },
+        );
+        if (!active) {
+          off();
+          return;
+        }
+        unsubscribe = off;
+      } catch (error) {
+        console.error(
+          "[App] Failed to subscribe project-provider-switched event",
+          error,
+        );
+      }
+    };
+
+    void setupListener();
+    return () => {
+      active = false;
+      unsubscribe?.();
+    };
+  }, [projectScope]);
 
   useEffect(() => {
     let active = true;
@@ -1043,7 +1092,7 @@ export function AppLayout() {
             >
               <ProjectScopeList
                 selectedScope={projectScope}
-                onScopeChange={setProjectScope}
+                onScopeChange={handleScopeChange}
                 providers={providers}
                 globalCurrentProviderId={currentProviderId}
                 projectCurrentProviderId={projectCurrentProviderId}

@@ -20,6 +20,11 @@ export const projectsApi = {
   async saveSettings(projectPath: string, content: string): Promise<void> {
     return invoke<void>("save_project_settings", { projectPath, content });
   },
+
+  /** 同步前端当前选中的项目作用域到后端（供托盘菜单构建「当前项目」区块读取）。 */
+  async setCurrentProjectScope(projectPath: string | null): Promise<void> {
+    return invoke<void>("set_current_project_scope", { projectPath });
+  },
 };
 
 /** 将完整路径缩写显示：保留首段和最后一级目录，中间用 ... 替代 */
