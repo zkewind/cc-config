@@ -175,6 +175,7 @@ macro_rules! all_handlers {
             crate::commands::get_managed_project_paths,
             crate::commands::add_managed_project_path,
             crate::commands::remove_managed_project_path,
+            crate::commands::set_current_project_scope,
 
             // ── Session Manager 会话管理 ───────────────────────────────
             crate::commands::list_sessions,

@@ -338,3 +338,21 @@ pub async fn remove_managed_project_path(
         .remove_managed_project_path(&path)
         .map_err(|e| e.to_string())
 }
+
+/// 同步前端当前选中的项目作用域到后端（供托盘菜单构建读取）。
+///
+/// `projectPath = None / 空 / "user"` 视为未选中（清空字段）。
+/// 命令内直接刷新托盘菜单，调用方无需另发事件。
+#[tauri::command]
+pub async fn set_current_project_scope(
+    state: tauri::State<'_, crate::AppState>,
+    app: tauri::AppHandle,
+    #[allow(non_snake_case)] projectPath: Option<String>,
+) -> Result<(), String> {
+    state
+        .db
+        .set_current_project_scope(projectPath.as_deref())
+        .map_err(|e| e.to_string())?;
+    crate::tray::refresh_tray_menu(&app);
+    Ok(())
+}
