@@ -33,3 +33,6 @@ mainWindow.js
 /docs/superpowers/
 /assets/temp/
 /docs/
+
+# Tauri 本地签名私钥（严禁入库）
+cc-config.key
