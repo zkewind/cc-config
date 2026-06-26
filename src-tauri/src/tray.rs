@@ -13,6 +13,8 @@ use crate::store::AppState;
 #[derive(Clone, Copy)]
 pub struct TrayTexts {
     pub global_config: &'static str,
+    #[allow(dead_code)] // 任务5 项目区块接线后移除
+    pub current_project_label: &'static str,
     pub no_providers_label: &'static str,
     pub lightweight_mode: &'static str,
     pub quit: &'static str,
@@ -25,6 +27,7 @@ impl TrayTexts {
         match language {
             "en" => Self {
                 global_config: "Global Providers",
+                current_project_label: "Current Project",
                 no_providers_label: "(no providers)",
                 lightweight_mode: "Lightweight Mode",
                 quit: "Quit",
@@ -33,6 +36,7 @@ impl TrayTexts {
             },
             _ => Self {
                 global_config: "全局供应商",
+                current_project_label: "当前项目",
                 no_providers_label: "(无供应商)",
                 lightweight_mode: "轻量模式",
                 quit: "退出",
@@ -61,6 +65,34 @@ pub const TRAY_SECTIONS: [TrayAppSection; 1] = [TrayAppSection {
     header_label: "Claude",
     log_name: "Claude",
 }];
+
+/// 托盘供应商事件分类。
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(dead_code)] // 任务5 handle_provider_tray_event 接线后移除
+pub enum ProviderEventKind {
+    /// 全局供应商切换，携带 provider_id
+    Global(String),
+    /// 当前项目供应商切换，携带 provider_id
+    Project(String),
+}
+
+/// 将托盘菜单事件 id 分类为全局/项目供应商事件。
+///
+/// 注意：项目前缀 `<prefix>proj_` 必须先于全局前缀 `<prefix>` 判定，
+/// 因为前者是后者的前缀（`claude_proj_x` 以 `claude_` 开头）。
+#[allow(dead_code)] // 任务5 handle_provider_tray_event 接线后移除
+pub fn classify_provider_event(event_id: &str) -> Option<ProviderEventKind> {
+    for section in TRAY_SECTIONS.iter() {
+        let project_prefix = format!("{}proj_", section.prefix);
+        if let Some(pid) = event_id.strip_prefix(&project_prefix) {
+            return Some(ProviderEventKind::Project(pid.to_string()));
+        }
+        if let Some(pid) = event_id.strip_prefix(section.prefix) {
+            return Some(ProviderEventKind::Global(pid.to_string()));
+        }
+    }
+    None
+}
 
 /// 对供应商列表排序：sort_index → created_at → name
 fn sort_providers(
@@ -378,5 +410,21 @@ mod tests {
     fn tray_id_is_unique_to_app() {
         assert_eq!(TRAY_ID, "claude-code-multi-config");
         assert_ne!(TRAY_ID, "main");
+    }
+
+    #[test]
+    fn classify_distinguishes_global_and_project_events() {
+        use super::{classify_provider_event, ProviderEventKind};
+        assert_eq!(
+            classify_provider_event("claude_p1"),
+            Some(ProviderEventKind::Global("p1".to_string()))
+        );
+        assert_eq!(
+            classify_provider_event("claude_proj_p2"),
+            Some(ProviderEventKind::Project("p2".to_string()))
+        );
+        assert_eq!(classify_provider_event("lightweight_mode"), None);
+        assert_eq!(classify_provider_event("quit"), None);
+        assert_eq!(classify_provider_event("current_project_header"), None);
     }
 }
