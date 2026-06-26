@@ -335,13 +335,12 @@ pub fn create_tray_menu(
             .map_err(|e| AppError::Message(format!("创建当前项目标题失败: {e}")))?;
             menu_builder = menu_builder.separator().item(&header_item);
 
-            let proj_current_id =
-                crate::resolve_provider_from_project_internal(
-                    app_state,
-                    app_type_str,
-                    project_path,
-                )
-                .unwrap_or_default();
+            let proj_current_id = crate::resolve_provider_from_project_internal(
+                app_state,
+                app_type_str,
+                project_path,
+            )
+            .unwrap_or_default();
 
             if providers.is_empty() {
                 let label = format!(
@@ -375,9 +374,9 @@ pub fn create_tray_menu(
                         })?;
                         others = others.item(&item);
                     }
-                    let others_submenu = others
-                        .build()
-                        .map_err(|e| AppError::Message(format!("构建当前项目溢出子菜单失败: {e}")))?;
+                    let others_submenu = others.build().map_err(|e| {
+                        AppError::Message(format!("构建当前项目溢出子菜单失败: {e}"))
+                    })?;
                     menu_builder = menu_builder.item(&others_submenu);
                 }
 

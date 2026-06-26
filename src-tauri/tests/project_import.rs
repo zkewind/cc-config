@@ -61,10 +61,7 @@ fn import_creates_new_provider_from_real_world_settings() {
 
     // 不再持久化 project_provider_* 字段（真相源改为 live 文件）
     let config_key = format!("project_provider_claude_{project_path}");
-    assert_eq!(
-        db.get_setting(&config_key).expect("get setting"),
-        None
-    );
+    assert_eq!(db.get_setting(&config_key).expect("get setting"), None);
 }
 
 #[test]
