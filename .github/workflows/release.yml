@@ -285,16 +285,16 @@ jobs:
           DMG_STAGE_DIR="$RUNNER_TEMP/dmg-stage"
           rm -rf "$DMG_STAGE_DIR"
           mkdir -p "$DMG_STAGE_DIR"
-          ditto "$APP_PATH" "$DMG_STAGE_DIR/CC Switch.app"
+          ditto "$APP_PATH" "$DMG_STAGE_DIR/CCConfig.app"
 
           create-dmg \
-            --volname "CC Switch" \
+            --volname "CCConfig" \
             --background "src-tauri/icons/dmg-background.png" \
             --window-size 660 400 \
             --window-pos 200 120 \
             --icon-size 80 \
-            --icon "CC Switch.app" 180 220 \
-            --hide-extension "CC Switch.app" \
+            --icon "CCConfig.app" 180 220 \
+            --hide-extension "CCConfig.app" \
             --app-drop-link 480 220 \
             --codesign "$APPLE_SIGNING_IDENTITY" \
             --no-internet-enable \
@@ -430,7 +430,7 @@ jobs:
             Copy-Item $exePath $portableDir
             $portableIniPath = Join-Path $portableDir 'portable.ini'
             $portableContent = @(
-              '# CC Switch portable build marker',
+              '# CC-Config portable build marker',
               'portable=true'
             )
             $portableContent | Set-Content -Path $portableIniPath -Encoding UTF8
@@ -538,10 +538,10 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
-          name: CC Switch ${{ github.ref_name }}
+          name: CC-Config ${{ github.ref_name }}
           prerelease: true
           body: |
-            ## CC Switch ${{ github.ref_name }}
+            ## CC-Config ${{ github.ref_name }}
 
             Claude Code 供应商切换工具
 
