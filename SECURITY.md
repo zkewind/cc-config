@@ -53,6 +53,6 @@ Reporters will be credited in the release notes unless they prefer to remain ano
 
 ## Security Updates / 安全更新
 
-Security fixes are released as patch versions and announced via [GitHub Releases](https://github.com/farion1231/cc-switch/releases). We recommend always updating to the latest version.
+Security fixes are released as patch versions and announced via [GitHub Releases](https://github.com/zkewind/cc-config/releases). We recommend always updating to the latest version.
 
-安全修复通过补丁版本发布，并通过 [GitHub Releases](https://github.com/farion1231/cc-switch/releases) 通知。建议始终更新到最新版本。
+安全修复通过补丁版本发布，并通过 [GitHub Releases](https://github.com/zkewind/cc-config/releases) 通知。建议始终更新到最新版本。

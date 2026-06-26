@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=CCConfig
+Comment=Manage multiple Claude Code configurations
+Exec=claude-code-multi-config
+Icon=com.ccconfig.desktop
+Terminal=false
+Categories=Utility;Development;
+StartupNotify=true

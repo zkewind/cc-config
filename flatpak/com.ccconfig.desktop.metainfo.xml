@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.ccconfig.desktop</id>
+  <name>CCConfig</name>
+  <summary>Manage multiple Claude Code configurations</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+
+  <description>
+    <p>CCConfig is a cross-platform desktop app for managing and switching provider configurations for Claude Code.</p>
+    <ul>
+      <li>Manage multiple provider configurations and endpoints</li>
+      <li>One-click switch and sync to client live configurations</li>
+      <li>MCP servers and Prompt/Skills management</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">com.ccconfig.desktop.desktop</launchable>
+  <provides>
+    <binary>claude-code-multi-config</binary>
+  </provides>
+
+  <url type="homepage">https://github.com/farion1231/cc-switch</url>
+  <url type="bugtracker">https://github.com/farion1231/cc-switch/issues</url>
+</component>
