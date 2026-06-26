@@ -2,7 +2,7 @@ span
 
 # CC Config
 
-## Claude Code 配置管理工具
+## Claude Code 多项目可视化管理
 
 本项目是一个 Claude Code CLI 可视化配置管理工具，他不仅支持全局配置，还增加了对项目级配置的功能。
 
