@@ -384,6 +384,38 @@ pub fn update_providers_sort_order(
     ProviderService::update_sort_order(state.inner(), app_type, updates).map_err(|e| e.to_string())
 }
 
+/// 把指定供应商配置深度合并写入 `<project_path>/.claude/settings.json`。
+///
+/// 保留项目文件中已有的其他配置（如 mcpServers），仅覆盖供应商相关字段。
+/// 供 `switch_provider_for_project` 命令与托盘 `handle_project_provider_click` 共用。
+pub fn apply_provider_to_project(
+    provider: &crate::provider::Provider,
+    project_path: &str,
+) -> Result<(), AppError> {
+    use crate::services::provider::{json_deep_merge, sanitize_claude_settings_for_live};
+
+    let settings_path = std::path::Path::new(project_path)
+        .join(".claude")
+        .join("settings.json");
+
+    // 读取已有的项目配置（不存在则为空对象）
+    let mut existing: serde_json::Value = if settings_path.exists() {
+        let content = std::fs::read_to_string(&settings_path)
+            .map_err(|e| AppError::Message(format!("读取项目配置失败: {e}")))?;
+        serde_json::from_str(&content).unwrap_or(serde_json::Value::Object(Default::default()))
+    } else {
+        serde_json::Value::Object(Default::default())
+    };
+
+    // 将供应商配置深度合并到已有配置上
+    let sanitized = sanitize_claude_settings_for_live(&provider.settings_config);
+    json_deep_merge(&mut existing, &sanitized);
+
+    // 写入项目 settings.json（自动创建 .claude 目录）
+    crate::config::write_json_file(&settings_path, &existing)?;
+    Ok(())
+}
+
 /// 将某个供应商配置写入指定项目目录的 .claude/settings.json
 ///
 /// 采用深度合并策略：保留项目文件中已有的其他配置（如 mcpServers），
@@ -395,8 +427,6 @@ pub fn switch_provider_for_project(
     id: String,
     #[allow(non_snake_case)] projectPath: String,
 ) -> Result<SwitchResult, String> {
-    use crate::services::provider::{json_deep_merge, sanitize_claude_settings_for_live};
-
     let app_type = AppType::from_str(&app).map_err(|e| e.to_string())?;
 
     let provider = state
@@ -405,25 +435,7 @@ pub fn switch_provider_for_project(
         .map_err(|e| e.to_string())?
         .ok_or_else(|| format!("供应商不存在: {id}"))?;
 
-    let settings_path = std::path::Path::new(&projectPath)
-        .join(".claude")
-        .join("settings.json");
-
-    // 读取已有的项目配置（不存在则为空对象）
-    let mut existing: serde_json::Value = if settings_path.exists() {
-        let content = std::fs::read_to_string(&settings_path)
-            .map_err(|e| format!("读取项目配置失败: {e}"))?;
-        serde_json::from_str(&content).unwrap_or(serde_json::Value::Object(Default::default()))
-    } else {
-        serde_json::Value::Object(Default::default())
-    };
-
-    // 将供应商配置深度合并到已有配置上
-    let sanitized = sanitize_claude_settings_for_live(&provider.settings_config);
-    json_deep_merge(&mut existing, &sanitized);
-
-    // 写入项目 settings.json（自动创建 .claude 目录）
-    crate::config::write_json_file(&settings_path, &existing).map_err(|e| e.to_string())?;
+    apply_provider_to_project(&provider, &projectPath).map_err(|e| e.to_string())?;
 
     Ok(SwitchResult::default())
 }
@@ -482,7 +494,7 @@ pub fn resolve_current_provider_for_project_test_hook(
 /// - 无命中 → 按"域名_*key末两位"命名规则导入为新供应商 → 返回新 ID（不写字段）
 ///
 /// import 与 resolve 两个命令共用此函数；自此 project_provider_* 字段无写入路径。
-fn resolve_provider_from_project_internal(
+pub(crate) fn resolve_provider_from_project_internal(
     state: &AppState,
     app: &str,
     project_path: &str,
@@ -693,4 +705,67 @@ pub fn get_current_provider_for_project(
         .get_setting(&config_key)
         .map_err(|e| e.to_string())?
         .unwrap_or_default())
+}
+
+#[cfg(test)]
+mod project_apply_tests {
+    use super::apply_provider_to_project;
+
+    fn sample_provider() -> crate::provider::Provider {
+        crate::provider::Provider {
+            id: "p1".into(),
+            name: "P1".into(),
+            settings_config: serde_json::json!({
+                "env": {
+                    "ANTHROPIC_AUTH_TOKEN": "sk-test",
+                    "ANTHROPIC_BASE_URL": "http://example.com"
+                }
+            }),
+            website_url: None,
+            category: None,
+            created_at: None,
+            sort_index: None,
+            notes: None,
+            meta: None,
+            icon: None,
+            icon_color: None,
+        }
+    }
+
+    #[test]
+    fn preserves_existing_unrelated_fields_via_deep_merge() {
+        let temp = tempfile::tempdir().unwrap();
+        let project_path = temp.path();
+        let settings_path = project_path.join(".claude").join("settings.json");
+        std::fs::create_dir_all(settings_path.parent().unwrap()).unwrap();
+        std::fs::write(
+            &settings_path,
+            r#"{"mcpServers":{"existing":{}},"retainMe":"x"}"#,
+        )
+        .unwrap();
+
+        apply_provider_to_project(&sample_provider(), project_path.to_str().unwrap()).unwrap();
+
+        let written: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&settings_path).unwrap()).unwrap();
+        // 深度合并：既有 mcpServers 与自定义字段必须保留
+        assert_eq!(written["mcpServers"]["existing"], serde_json::json!({}));
+        assert_eq!(written["retainMe"], "x");
+        // 供应商 env 已写入（sanitize 仅剔除 api_format 等，保留 env）
+        assert_eq!(written["env"]["ANTHROPIC_BASE_URL"], "http://example.com");
+    }
+
+    #[test]
+    fn creates_claude_dir_and_file_when_absent() {
+        let temp = tempfile::tempdir().unwrap();
+        let project_path = temp.path();
+
+        apply_provider_to_project(&sample_provider(), project_path.to_str().unwrap()).unwrap();
+
+        let settings_path = temp.path().join(".claude").join("settings.json");
+        assert!(settings_path.exists(), ".claude/settings.json 应被自动创建");
+        let written: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&settings_path).unwrap()).unwrap();
+        assert_eq!(written["env"]["ANTHROPIC_AUTH_TOKEN"], "sk-test");
+    }
 }
