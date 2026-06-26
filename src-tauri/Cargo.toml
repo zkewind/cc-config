@@ -1,6 +1,6 @@
 [package]
 name = "claude-code-multi-config"
-version = "0.2.0"
+version = "0.3.0"
 description = "CCConfig"
 authors = ["Jason Young"]
 license = "MIT"
