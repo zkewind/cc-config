@@ -13,7 +13,6 @@ use crate::store::AppState;
 #[derive(Clone, Copy)]
 pub struct TrayTexts {
     pub global_config: &'static str,
-    #[allow(dead_code)] // 任务5 项目区块接线后移除
     pub current_project_label: &'static str,
     pub no_providers_label: &'static str,
     pub lightweight_mode: &'static str,
@@ -68,7 +67,6 @@ pub const TRAY_SECTIONS: [TrayAppSection; 1] = [TrayAppSection {
 
 /// 托盘供应商事件分类。
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[allow(dead_code)] // 任务5 handle_provider_tray_event 接线后移除
 pub enum ProviderEventKind {
     /// 全局供应商切换，携带 provider_id
     Global(String),
@@ -80,7 +78,6 @@ pub enum ProviderEventKind {
 ///
 /// 注意：项目前缀 `<prefix>proj_` 必须先于全局前缀 `<prefix>` 判定，
 /// 因为前者是后者的前缀（`claude_proj_x` 以 `claude_` 开头）。
-#[allow(dead_code)] // 任务5 handle_provider_tray_event 接线后移除
 pub fn classify_provider_event(event_id: &str) -> Option<ProviderEventKind> {
     for section in TRAY_SECTIONS.iter() {
         let project_prefix = format!("{}proj_", section.prefix);
@@ -121,21 +118,36 @@ fn sort_providers(
 
 /// 处理供应商托盘事件
 pub fn handle_provider_tray_event(app: &tauri::AppHandle, event_id: &str) -> bool {
-    for section in TRAY_SECTIONS.iter() {
-        if let Some(suffix) = event_id.strip_prefix(section.prefix) {
-            log::info!("切换到{}供应商: {suffix}", section.log_name);
+    let Some(kind) = classify_provider_event(event_id) else {
+        return false;
+    };
+    match kind {
+        ProviderEventKind::Global(provider_id) => {
+            log::info!("切换到全局供应商: {provider_id}");
             let app_handle = app.clone();
-            let provider_id = suffix.to_string();
-            let app_type = section.app_type.clone();
+            let app_type = TRAY_SECTIONS[0].app_type.clone();
             tauri::async_runtime::spawn_blocking(move || {
                 if let Err(e) = handle_provider_click(&app_handle, &app_type, &provider_id) {
-                    log::error!("切换{}供应商失败: {e}", section.log_name);
+                    log::error!("切换全局供应商失败: {e}");
                 }
             });
-            return true;
+            true
+        }
+        ProviderEventKind::Project(provider_id) => {
+            log::info!("切换当前项目供应商: {provider_id}");
+            let app_handle = app.clone();
+            tauri::async_runtime::spawn_blocking(move || {
+                if let Some(app_state) = app_handle.try_state::<AppState>() {
+                    if let Err(e) =
+                        handle_project_provider_click(&app_handle, app_state.inner(), &provider_id)
+                    {
+                        log::error!("切换当前项目供应商失败: {e}");
+                    }
+                }
+            });
+            true
         }
     }
-    false
 }
 
 /// 处理供应商点击：切换供应商
@@ -161,6 +173,50 @@ fn handle_provider_click(
             log::error!("发射 provider-switched 事件失败: {e}");
         }
     }
+    Ok(())
+}
+
+/// 处理当前项目供应商点击：写入项目的 `.claude/settings.json`。
+///
+/// 项目路径取自后端同步的前端选中作用域（`current_project_scope`），
+/// 真实来源为项目实时 `.claude/settings.json` 文件。
+fn handle_project_provider_click(
+    app: &tauri::AppHandle,
+    app_state: &AppState,
+    provider_id: &str,
+) -> Result<(), AppError> {
+    let project_path = app_state
+        .db
+        .get_current_project_scope()?
+        .as_deref()
+        .map(str::trim)
+        .filter(|p| !p.is_empty() && *p != "user")
+        .map(str::to_owned)
+        .ok_or_else(|| AppError::Message("当前未选中有效项目作用域".to_string()))?;
+
+    let provider = app_state
+        .db
+        .get_all_providers(AppType::Claude.as_str())?
+        .get(provider_id)
+        .cloned()
+        .ok_or_else(|| AppError::Message(format!("供应商不存在: {provider_id}")))?;
+
+    crate::apply_provider_to_project(&provider, &project_path)?;
+
+    if let Ok(new_menu) = create_tray_menu(app, app_state) {
+        if let Some(tray) = app.tray_by_id(TRAY_ID) {
+            let _ = tray.set_menu(Some(new_menu));
+        }
+    }
+
+    let event_data = serde_json::json!({
+        "projectPath": project_path,
+        "providerId": provider_id
+    });
+    if let Err(e) = app.emit("project-provider-switched", event_data) {
+        log::error!("发射 project-provider-switched 事件失败: {e}");
+    }
+
     Ok(())
 }
 
@@ -244,6 +300,100 @@ pub fn create_tray_menu(
                     AppError::Message(format!("创建{}菜单项失败: {e}", section.log_name))
                 })?;
                 menu_builder = menu_builder.item(&item);
+            }
+        }
+
+        // ── 当前项目区块（跟随前端选中项目） ──
+        let current_scope = app_state.db.get_current_project_scope()?;
+        let visible_project = current_scope
+            .as_deref()
+            .map(str::trim)
+            .filter(|p| !p.is_empty() && *p != "user")
+            .filter(|p| {
+                app_state
+                    .db
+                    .get_managed_project_paths()
+                    .unwrap_or_default()
+                    .iter()
+                    .any(|m| m.as_str() == *p)
+            })
+            .filter(|p| std::path::Path::new(*p).exists());
+
+        if let Some(project_path) = visible_project {
+            let display_name = std::path::Path::new(project_path)
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| project_path.to_string());
+            let header_label = format!("{} · {}", tray_texts.current_project_label, display_name);
+            let header_item = MenuItem::with_id(
+                app,
+                "current_project_header",
+                &header_label,
+                false,
+                None::<&str>,
+            )
+            .map_err(|e| AppError::Message(format!("创建当前项目标题失败: {e}")))?;
+            menu_builder = menu_builder.separator().item(&header_item);
+
+            let proj_current_id =
+                crate::resolve_provider_from_project_internal(
+                    app_state,
+                    app_type_str,
+                    project_path,
+                )
+                .unwrap_or_default();
+
+            if providers.is_empty() {
+                let label = format!(
+                    "{} {}",
+                    tray_texts.current_project_label, tray_texts.no_providers_label
+                );
+                let empty_item =
+                    MenuItem::with_id(app, "current_project_empty", &label, false, None::<&str>)
+                        .map_err(|e| AppError::Message(format!("创建当前项目空提示失败: {e}")))?;
+                menu_builder = menu_builder.item(&empty_item);
+            } else {
+                let limit = crate::settings::effective_tray_provider_limit();
+                let proj_sorted = sort_providers(&providers);
+
+                if proj_sorted.len() > limit {
+                    let others_id = format!("submenu_{}_proj_others", app_type_str);
+                    let mut others =
+                        SubmenuBuilder::with_id(app, &others_id, tray_texts.others_label);
+                    for &(id, provider) in proj_sorted.iter().skip(limit) {
+                        let is_current = proj_current_id == *id;
+                        let item = CheckMenuItem::with_id(
+                            app,
+                            format!("{}proj_{}", section.prefix, id),
+                            &provider.name,
+                            true,
+                            is_current,
+                            None::<&str>,
+                        )
+                        .map_err(|e| {
+                            AppError::Message(format!("创建当前项目溢出菜单项失败: {e}"))
+                        })?;
+                        others = others.item(&item);
+                    }
+                    let others_submenu = others
+                        .build()
+                        .map_err(|e| AppError::Message(format!("构建当前项目溢出子菜单失败: {e}")))?;
+                    menu_builder = menu_builder.item(&others_submenu);
+                }
+
+                for &(id, provider) in proj_sorted.iter().take(limit) {
+                    let is_current = proj_current_id == *id;
+                    let item = CheckMenuItem::with_id(
+                        app,
+                        format!("{}proj_{}", section.prefix, id),
+                        &provider.name,
+                        true,
+                        is_current,
+                        None::<&str>,
+                    )
+                    .map_err(|e| AppError::Message(format!("创建当前项目菜单项失败: {e}")))?;
+                    menu_builder = menu_builder.item(&item);
+                }
             }
         }
 
