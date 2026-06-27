@@ -264,9 +264,9 @@ pub fn run() {
                         window.app_handle().exit(0);
                     }
                 }
+                // Windows 原生最小化按钮无法被直接拦截，通过 Focused(false) + is_minimized() 检测
+                #[cfg(target_os = "windows")]
                 tauri::WindowEvent::Focused(focused) => {
-                    // Windows 原生最小化按钮无法被直接拦截，通过 Focused(false) + is_minimized() 检测
-                    #[cfg(target_os = "windows")]
                     if !focused && window.label() == "main" {
                         let settings = crate::settings::get_settings();
                         if !settings.minimize_to_tray_on_close

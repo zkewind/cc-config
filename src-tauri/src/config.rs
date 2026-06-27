@@ -314,7 +314,7 @@ mod tests {
         let cases = vec![
             serde_json::json!("hello"),
             serde_json::json!(42),
-            serde_json::json!(3.14),
+            serde_json::json!(1.5),
             serde_json::json!(true),
             serde_json::json!(null),
         ];

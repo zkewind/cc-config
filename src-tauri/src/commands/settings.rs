@@ -82,6 +82,7 @@ pub async fn set_auto_launch(enabled: bool) -> Result<bool, String> {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::field_reassign_with_default)]
     use super::merge_settings_for_save;
     use crate::settings::{AppSettings, WebDavSyncSettings};
 
