@@ -36,3 +36,4 @@ mainWindow.js
 
 # Tauri 本地签名私钥（严禁入库）
 cc-config.key
+/scripts/

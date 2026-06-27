@@ -34,8 +34,8 @@ macro_rules! all_handlers {
     () => {
         tauri::generate_handler![
             // ── Provider 供应商管理 ─────────────────────────────────────
-            crate::commands::get_providers,
-            crate::commands::get_current_provider,
+            $crate::commands::get_providers,
+            $crate::commands::get_current_provider,
             crate::commands::add_provider,
             crate::commands::update_provider,
             crate::commands::delete_provider,

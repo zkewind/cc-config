@@ -34,16 +34,14 @@ pub(crate) fn take_sse_block(buffer: &mut String) -> Option<String> {
 pub(crate) fn append_utf8_safe(buffer: &mut String, remainder: &mut Vec<u8>, new_bytes: &[u8]) {
     let (owned, bytes): (Option<Vec<u8>>, &[u8]) = if remainder.is_empty() {
         (None, new_bytes)
+    } else if remainder.len() > 3 {
+        buffer.push_str(&String::from_utf8_lossy(remainder));
+        remainder.clear();
+        (None, new_bytes)
     } else {
-        if remainder.len() > 3 {
-            buffer.push_str(&String::from_utf8_lossy(remainder));
-            remainder.clear();
-            (None, new_bytes)
-        } else {
-            let mut combined = std::mem::take(remainder);
-            combined.extend_from_slice(new_bytes);
-            (Some(combined), &[])
-        }
+        let mut combined = std::mem::take(remainder);
+        combined.extend_from_slice(new_bytes);
+        (Some(combined), &[])
     };
     let input = owned.as_deref().unwrap_or(bytes);
 
