@@ -1,5 +1,3 @@
-span
-
 # CC Config
 
 ## Claude Code 多项目可视化管理
