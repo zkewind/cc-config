@@ -64,6 +64,7 @@ macro_rules! all_handlers {
             $crate::commands::get_claude_code_config_path,
             $crate::commands::get_config_dir,
             $crate::commands::open_config_folder,
+            $crate::commands::open_folder_in_explorer,
             $crate::commands::get_app_config_path,
             $crate::commands::open_app_config_folder,
             $crate::commands::get_app_config_dir_override,

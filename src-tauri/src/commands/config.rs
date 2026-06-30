@@ -118,6 +118,29 @@ pub async fn get_app_config_path() -> Result<String, String> {
 }
 
 #[tauri::command]
+pub async fn open_folder_in_explorer(handle: AppHandle, path: String) -> Result<bool, String> {
+    let path = path.trim().to_string();
+    if path.is_empty() {
+        return Err("路径不能为空".to_string());
+    }
+
+    let dir = std::path::Path::new(&path);
+    if !dir.exists() {
+        return Err(format!("目录不存在: {path}"));
+    }
+    if !dir.is_dir() {
+        return Err(format!("不是有效目录: {path}"));
+    }
+
+    handle
+        .opener()
+        .open_path(path, None::<String>)
+        .map_err(|e| format!("打开文件夹失败: {e}"))?;
+
+    Ok(true)
+}
+
+#[tauri::command]
 pub async fn open_app_config_folder(handle: AppHandle) -> Result<bool, String> {
     let config_dir = config::get_app_config_dir();
 

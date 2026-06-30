@@ -25,6 +25,10 @@ export const projectsApi = {
   async setCurrentProjectScope(projectPath: string | null): Promise<void> {
     return invoke<void>("set_current_project_scope", { projectPath });
   },
+
+  async openInExplorer(path: string): Promise<void> {
+    await invoke("open_folder_in_explorer", { path });
+  },
 };
 
 /** 将完整路径缩写显示：保留首段和最后一级目录，中间用 ... 替代 */

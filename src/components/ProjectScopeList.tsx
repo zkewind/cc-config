@@ -144,6 +144,28 @@ export function ProjectScopeList({
     }
   };
 
+  const handleOpenInExplorer = async (path: string) => {
+    try {
+      await projectsApi.openInExplorer(path);
+    } catch (err) {
+      console.error("[ProjectScopeList] 打开目录失败:", err);
+      toast.error(
+        t("projectScope.openFailed", { defaultValue: "无法在资源管理器中打开目录" }),
+      );
+    }
+  };
+
+  const handleOpenGlobalConfigFolder = async () => {
+    try {
+      await settingsApi.openConfigFolder(activeApp);
+    } catch (err) {
+      console.error("[ProjectScopeList] 打开全局配置目录失败:", err);
+      toast.error(
+        t("projectScope.openFailed", { defaultValue: "无法在资源管理器中打开目录" }),
+      );
+    }
+  };
+
   const handleRemoveProject = async (path: string) => {
     try {
       await projectsApi.remove(path);
@@ -208,6 +230,7 @@ export function ProjectScopeList({
               label={t("projectScope.userLevel", { defaultValue: "全局配置" })}
               isSelected={selectedScope === "user"}
               onClick={() => onScopeChange("user")}
+              onDoubleClick={() => void handleOpenGlobalConfigFolder()}
               icon={<FolderOpen className="h-3.5 w-3.5 shrink-0" />}
               currentProviderName={
                 providers[globalCurrentProviderId]?.name ?? ""
@@ -225,6 +248,7 @@ export function ProjectScopeList({
                   fullPath={path}
                   isSelected={selectedScope === path}
                   onClick={() => onScopeChange(path)}
+                  onDoubleClick={() => void handleOpenInExplorer(path)}
                   onRemove={() => setConfirmRemovePath(path)}
                   icon={<FolderOpen className="h-3.5 w-3.5 shrink-0" />}
                   currentProviderName={
@@ -285,6 +309,7 @@ interface ScopeItemProps {
   fullPath?: string;
   isSelected: boolean;
   onClick: () => void;
+  onDoubleClick?: () => void;
   onRemove?: () => void;
   icon?: React.ReactNode;
   currentProviderName?: string;
@@ -297,6 +322,7 @@ function ScopeItem({
   fullPath,
   isSelected,
   onClick,
+  onDoubleClick,
   onRemove,
   icon,
   currentProviderName,
@@ -310,6 +336,7 @@ function ScopeItem({
       role="button"
       tabIndex={0}
       onClick={onClick}
+      onDoubleClick={onDoubleClick}
       onKeyDown={(e) => e.key === "Enter" && onClick()}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
