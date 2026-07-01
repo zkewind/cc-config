@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
-import { Plus, X, FolderOpen } from "lucide-react";
+import { createPortal } from "react-dom";
+import { Plus, X, FolderOpen, Terminal } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import { projectsApi, computePathLabels } from "@/lib/api/projects";
 import { settingsApi, providersApi, type AppId } from "@/lib/api";
+import { terminalApi } from "@/lib/api/terminal";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -45,6 +47,22 @@ export function ProjectScopeList({
     new Map(),
   );
   const [col2Width, setCol2Width] = useState(80);
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    projectPath?: string;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!contextMenu) return;
+    const close = () => setContextMenu(null);
+    document.addEventListener("click", close);
+    document.addEventListener("contextmenu", close);
+    return () => {
+      document.removeEventListener("click", close);
+      document.removeEventListener("contextmenu", close);
+    };
+  }, [contextMenu]);
 
   const loadPaths = useCallback(async () => {
     try {
@@ -166,6 +184,29 @@ export function ProjectScopeList({
     }
   };
 
+  const handleOpenInTerminal = async (projectPath?: string) => {
+    try {
+      await terminalApi.openInTerminal(projectPath);
+      toast.success(
+        t("projectScope.terminalOpened", { defaultValue: "终端已打开" }),
+      );
+    } catch (err) {
+      console.error("[ProjectScopeList] 打开终端失败:", err);
+      toast.error(
+        t("projectScope.terminalOpenFailed", { defaultValue: "打开终端失败" }),
+      );
+    }
+  };
+
+  const handleScopeContextMenu = (
+    e: React.MouseEvent,
+    projectPath?: string,
+  ) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({ x: e.clientX, y: e.clientY, projectPath });
+  };
+
   const handleRemoveProject = async (path: string) => {
     try {
       await projectsApi.remove(path);
@@ -231,6 +272,7 @@ export function ProjectScopeList({
               isSelected={selectedScope === "user"}
               onClick={() => onScopeChange("user")}
               onDoubleClick={() => void handleOpenGlobalConfigFolder()}
+              onContextMenu={(e) => handleScopeContextMenu(e)}
               icon={<FolderOpen className="h-3.5 w-3.5 shrink-0" />}
               currentProviderName={
                 providers[globalCurrentProviderId]?.name ?? ""
@@ -249,6 +291,7 @@ export function ProjectScopeList({
                   isSelected={selectedScope === path}
                   onClick={() => onScopeChange(path)}
                   onDoubleClick={() => void handleOpenInExplorer(path)}
+                  onContextMenu={(e) => handleScopeContextMenu(e, path)}
                   onRemove={() => setConfirmRemovePath(path)}
                   icon={<FolderOpen className="h-3.5 w-3.5 shrink-0" />}
                   currentProviderName={
@@ -270,6 +313,31 @@ export function ProjectScopeList({
           </CardContent>
         </Card>
       </TooltipProvider>
+
+      {contextMenu &&
+        createPortal(
+          <div
+            className="fixed z-50 min-w-[10rem] overflow-hidden rounded-md border border-border-default bg-popover p-1 text-popover-foreground shadow-md"
+            style={{ top: contextMenu.y, left: contextMenu.x }}
+            onClick={(e) => e.stopPropagation()}
+            onContextMenu={(e) => e.preventDefault()}
+          >
+            <button
+              type="button"
+              className="relative flex w-full cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground"
+              onClick={() => {
+                void handleOpenInTerminal(contextMenu.projectPath);
+                setContextMenu(null);
+              }}
+            >
+              <Terminal className="h-4 w-4" />
+              {t("projectScope.openInTerminal", {
+                defaultValue: "在终端中打开",
+              })}
+            </button>
+          </div>,
+          document.body,
+        )}
 
       <ConfirmDialog
         isOpen={confirmRemovePath !== null}
@@ -310,6 +378,7 @@ interface ScopeItemProps {
   isSelected: boolean;
   onClick: () => void;
   onDoubleClick?: () => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
   onRemove?: () => void;
   icon?: React.ReactNode;
   currentProviderName?: string;
@@ -323,6 +392,7 @@ function ScopeItem({
   isSelected,
   onClick,
   onDoubleClick,
+  onContextMenu,
   onRemove,
   icon,
   currentProviderName,
@@ -337,6 +407,7 @@ function ScopeItem({
       tabIndex={0}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
+      onContextMenu={onContextMenu}
       onKeyDown={(e) => e.key === "Enter" && onClick()}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}

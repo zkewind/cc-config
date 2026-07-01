@@ -1515,6 +1515,175 @@ read -n 1 -s
     }
 }
 
+/// 在系统原生终端中打开指定目录
+#[tauri::command]
+pub async fn open_in_terminal(cwd: Option<String>) -> Result<bool, String> {
+    let launch_cwd = resolve_launch_cwd(cwd)?;
+
+    launch_native_terminal(launch_cwd.as_deref())
+        .map_err(|e| format!("启动终端失败: {e}"))?;
+
+    Ok(true)
+}
+
+/// 启动系统原生终端（不带任何环境变量配置）
+fn launch_native_terminal(cwd: Option<&Path>) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        launch_windows_native_terminal(cwd)
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        launch_macos_native_terminal(cwd)
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        launch_linux_native_terminal(cwd)
+    }
+
+    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+    Err("不支持的操作系统".to_string())
+}
+
+/// Windows: 启动 Windows Terminal 或 PowerShell/cmd
+#[cfg(target_os = "windows")]
+fn launch_windows_native_terminal(cwd: Option<&Path>) -> Result<(), String> {
+    use std::process::Command;
+
+    let cwd_arg = cwd.map(|p| p.to_string_lossy().into_owned());
+
+    // 优先 Windows Terminal，使用 -w new 强制每次打开新窗口。
+    // wt.exe 是 Windows 应用执行别名（0 字节存根），直接用 Command::spawn() 调用无法启动，
+    // 必须通过 `cmd /c start`（底层 ShellExecuteW）启动。
+    // 先检测别名是否存在，避免 cmd /c start 总是返回成功而无法判断失败。
+    let wt_available = std::env::var_os("LOCALAPPDATA")
+        .map(|lad| {
+            std::path::Path::new(&lad)
+                .join("Microsoft")
+                .join("WindowsApps")
+                .join("wt.exe")
+                .exists()
+        })
+        .unwrap_or(false);
+
+    if wt_available {
+        let wt_spawn = if let Some(ref dir) = cwd_arg {
+            Command::new("cmd")
+                .args(["/c", "start", "", "wt", "-w", "new", "-d", dir])
+                .creation_flags(CREATE_NO_WINDOW)
+                .spawn()
+        } else {
+            Command::new("cmd")
+                .args(["/c", "start", "", "wt", "-w", "new"])
+                .creation_flags(CREATE_NO_WINDOW)
+                .spawn()
+        };
+        if wt_spawn.is_ok() {
+            return Ok(());
+        }
+    }
+
+    // 回退到 PowerShell
+    let ps_result = if let Some(ref dir) = cwd_arg {
+        Command::new("powershell")
+            .args(["-NoExit", "-Command", &format!("cd '{}'", dir.replace('\'', "''"))])
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn()
+    } else {
+        Command::new("powershell")
+            .args(["-NoExit"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn()
+    };
+
+    if ps_result.is_ok() {
+        return Ok(());
+    }
+
+    // 最终回退到 cmd
+    if let Some(ref dir) = cwd_arg {
+        Command::new("cmd")
+            .args(["/K", &format!("cd /d \"{}\"", dir)])
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn()
+            .map_err(|e| format!("启动终端失败: {e}"))?;
+    } else {
+        Command::new("cmd")
+            .args(["/K"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn()
+            .map_err(|e| format!("启动终端失败: {e}"))?;
+    }
+
+    Ok(())
+}
+
+/// macOS: 启动 Terminal.app
+#[cfg(target_os = "macos")]
+fn launch_macos_native_terminal(cwd: Option<&Path>) -> Result<(), String> {
+    use std::process::Command;
+
+    let cd_command = if let Some(dir) = cwd {
+        format!("cd {}", shell_single_quote(&dir.to_string_lossy()))
+    } else {
+        String::new()
+    };
+
+    let applescript = format!(
+        r#"tell application "Terminal"
+    activate
+    do script "{}"
+end tell"#,
+        cd_command
+    );
+
+    let output = Command::new("osascript")
+        .arg("-e")
+        .arg(&applescript)
+        .output()
+        .map_err(|e| format!("启动终端失败: {e}"))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("终端启动失败: {}", stderr));
+    }
+
+    Ok(())
+}
+
+/// Linux: 启动常见终端模拟器
+#[cfg(target_os = "linux")]
+fn launch_linux_native_terminal(cwd: Option<&Path>) -> Result<(), String> {
+    use std::process::Command;
+
+    let terminals = [
+        "gnome-terminal",
+        "konsole",
+        "xfce4-terminal",
+        "mate-terminal",
+        "lxterminal",
+        "alacritty",
+        "kitty",
+    ];
+
+    for terminal in &terminals {
+        let mut cmd = Command::new(terminal);
+
+        if let Some(dir) = cwd {
+            // 大多数终端支持 --working-directory
+            cmd.arg("--working-directory").arg(dir);
+        }
+
+        if cmd.spawn().is_ok() {
+            return Ok(());
+        }
+    }
+
+    Err("未找到可用的终端".to_string())
+}
+
 /// 将主窗口最小化到系统托盘
 #[tauri::command]
 pub async fn minimize_to_tray(window: tauri::WebviewWindow) -> Result<(), String> {

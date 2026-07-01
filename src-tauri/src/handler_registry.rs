@@ -233,6 +233,7 @@ macro_rules! all_handlers {
             $crate::commands::is_portable_mode,
             $crate::commands::restart_app,
             $crate::commands::open_provider_terminal,
+            $crate::commands::open_in_terminal,
             $crate::commands::minimize_to_tray,
             $crate::commands::set_window_theme,
 
