@@ -280,6 +280,10 @@ export interface Settings {
   // Linux: "gnome-terminal" | "konsole" | "xfce4-terminal" | "alacritty" | "kitty" | "ghostty"
   preferredTerminal?: string;
 
+  // 通过右键菜单「用 Claude Code 打开」启动时，是否附带 --dangerously-skip-permissions
+  // （安全敏感选项，默认关闭）
+  openClaudeSkipPermissions?: boolean;
+
   // ===== 托盘菜单设置 =====
   // 托盘右键菜单一级直接显示的供应商数量（默认 5，超出收入"其他"子菜单）
   trayProviderLimit?: number;

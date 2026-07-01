@@ -1336,19 +1336,24 @@ fn run_windows_start_command(args: &[&str], terminal_name: &str) -> Result<(), S
 /// not found` / `ModuleNotFoundError` 这类诊断信息。
 ///
 /// **Security**：`command_line` 会被原样拼进 shell/batch 脚本，调用方必须
-/// 保证它是可信字符串（当前只由后端硬编码调用）。
-#[allow(dead_code)]
-pub(crate) fn launch_terminal_running(command_line: &str, label: &str) -> Result<(), String> {
+/// 保证它是可信字符串（当前只由后端硬编码调用）。`cwd` 不会原样拼接，而是
+/// 通过已有的 `build_shell_cd_command` / `build_windows_cwd_command` 做转义。
+pub(crate) fn launch_terminal_running(
+    command_line: &str,
+    cwd: Option<&Path>,
+    label: &str,
+) -> Result<(), String> {
     let temp_dir = std::env::temp_dir();
     let pid = std::process::id();
 
     #[cfg(any(target_os = "macos", target_os = "linux"))]
     let (script_file, script_content) = {
+        let cd_command = build_shell_cd_command(cwd);
         let file = temp_dir.join(format!("cc_switch_{}_{}.sh", label, pid));
         let content = format!(
             r#"#!/bin/bash
 trap 'rm -f "{script_path}"' EXIT
-echo "[cc-config] Starting: {cmd}"
+{cd_command}echo "[cc-config] Starting: {cmd}"
 echo ""
 {cmd}
 echo ""
@@ -1357,6 +1362,7 @@ read -n 1 -s
 "#,
             script_path = file.display(),
             cmd = command_line,
+            cd_command = cd_command,
         );
         (file, content)
     };
@@ -1470,9 +1476,11 @@ read -n 1 -s
         let terminal = preferred.as_deref().unwrap_or("cmd");
 
         let bat_file = temp_dir.join(format!("cc_switch_{}_{}.bat", label, pid));
+        let cwd_command = build_windows_cwd_command(cwd);
         let content = format!(
-            "@echo off\r\necho [cc-config] Starting: {cmd}\r\necho.\r\n{cmd}\r\necho.\r\necho [cc-config] Command exited. Press any key to close.\r\npause >nul\r\ndel \"%~f0\" >nul 2>&1\r\n",
+            "@echo off\r\n{cwd_command}echo [cc-config] Starting: {cmd}\r\necho.\r\n{cmd}\r\necho.\r\necho [cc-config] Command exited. Press any key to close.\r\npause >nul\r\ndel \"%~f0\" >nul 2>&1\r\n",
             cmd = command_line,
+            cwd_command = cwd_command,
         );
         std::fs::write(&bat_file, &content).map_err(|e| format!("写入批处理文件失败: {e}"))?;
 
@@ -1520,8 +1528,31 @@ read -n 1 -s
 pub async fn open_in_terminal(cwd: Option<String>) -> Result<bool, String> {
     let launch_cwd = resolve_launch_cwd(cwd)?;
 
-    launch_native_terminal(launch_cwd.as_deref())
-        .map_err(|e| format!("启动终端失败: {e}"))?;
+    launch_native_terminal(launch_cwd.as_deref()).map_err(|e| format!("启动终端失败: {e}"))?;
+
+    Ok(true)
+}
+
+/// 在用户首选终端中用 Claude Code 打开指定项目目录。
+///
+/// `skip_permissions` 为 true 时附带 `--dangerously-skip-permissions` 参数。
+/// 终端会先 `cd` 到 `cwd`（经 `resolve_launch_cwd` 校验/规整），再运行 claude，
+/// 退出后窗口保持打开以便查看诊断信息。
+#[tauri::command]
+pub async fn open_claude_in_terminal(
+    cwd: Option<String>,
+    skip_permissions: bool,
+) -> Result<bool, String> {
+    let launch_cwd = resolve_launch_cwd(cwd)?;
+
+    let command_line = if skip_permissions {
+        "claude --dangerously-skip-permissions"
+    } else {
+        "claude"
+    };
+
+    launch_terminal_running(command_line, launch_cwd.as_deref(), "open_claude")
+        .map_err(|e| format!("启动 Claude Code 失败: {e}"))?;
 
     Ok(true)
 }
@@ -1588,7 +1619,11 @@ fn launch_windows_native_terminal(cwd: Option<&Path>) -> Result<(), String> {
     // 回退到 PowerShell
     let ps_result = if let Some(ref dir) = cwd_arg {
         Command::new("powershell")
-            .args(["-NoExit", "-Command", &format!("cd '{}'", dir.replace('\'', "''"))])
+            .args([
+                "-NoExit",
+                "-Command",
+                &format!("cd '{}'", dir.replace('\'', "''")),
+            ])
             .creation_flags(CREATE_NO_WINDOW)
             .spawn()
     } else {

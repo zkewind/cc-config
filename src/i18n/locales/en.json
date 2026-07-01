@@ -551,6 +551,10 @@
         }
       }
     },
+    "openClaude": {
+      "title": "Skip permission prompts when opening with Claude Code",
+      "description": "When enabled, launching via the project right-click menu \"Open with Claude Code\" will append --dangerously-skip-permissions, skipping all permission prompts. This is a security risk; use only in trusted project directories."
+    },
     "configDirectoryOverride": "Configuration Directory Override (Advanced)",
     "configDirectoryDescription": "When using CLI tools in environments like WSL, you can manually specify the configuration directory to the one in WSL to keep provider data consistent with the main environment.",
     "appConfigDir": "CCConfig Configuration Directory",

@@ -174,6 +174,11 @@ pub struct AppSettings {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub preferred_terminal: Option<String>,
 
+    /// 通过右键菜单「用 Claude Code 打开」启动时，是否附带
+    /// `--dangerously-skip-permissions` 参数（安全敏感，默认关闭）
+    #[serde(default)]
+    pub open_claude_skip_permissions: bool,
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tray_provider_limit: Option<u32>,
 }
@@ -214,6 +219,7 @@ impl Default for AppSettings {
             backup_interval_hours: None,
             backup_retain_count: None,
             preferred_terminal: None,
+            open_claude_skip_permissions: false,
             tray_provider_limit: None,
         }
     }

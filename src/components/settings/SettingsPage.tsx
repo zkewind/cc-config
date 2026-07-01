@@ -32,6 +32,7 @@ import { WindowSettings } from "@/components/settings/WindowSettings";
 import { SkillStorageLocationSettings } from "@/components/settings/SkillStorageLocationSettings";
 import { SkillSyncMethodSettings } from "@/components/settings/SkillSyncMethodSettings";
 import { TerminalSettings } from "@/components/settings/TerminalSettings";
+import { OpenClaudeSettings } from "@/components/settings/OpenClaudeSettings";
 import { DirectorySettings } from "@/components/settings/DirectorySettings";
 import { ImportExportSection } from "@/components/settings/ImportExportSection";
 import { BackupListSection } from "@/components/settings/BackupListSection";
@@ -238,6 +239,12 @@ export function SettingsPage({
                       value={settings.preferredTerminal}
                       onChange={(terminal) =>
                         handleAutoSave({ preferredTerminal: terminal })
+                      }
+                    />
+                    <OpenClaudeSettings
+                      value={settings.openClaudeSkipPermissions}
+                      onChange={(v) =>
+                        handleAutoSave({ openClaudeSkipPermissions: v })
                       }
                     />
                   </motion.div>

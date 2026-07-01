@@ -8,4 +8,16 @@ export const terminalApi = {
   async openInTerminal(cwd?: string): Promise<boolean> {
     return await invoke("open_in_terminal", { cwd });
   },
+
+  /**
+   * 在用户首选终端中用 Claude Code 打开指定项目目录。
+   * @param cwd 项目目录路径
+   * @param skipPermissions 为 true 时附带 --dangerously-skip-permissions
+   */
+  async openClaudeInTerminal(
+    cwd: string,
+    skipPermissions: boolean,
+  ): Promise<boolean> {
+    return await invoke("open_claude_in_terminal", { cwd, skipPermissions });
+  },
 };

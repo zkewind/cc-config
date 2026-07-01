@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { Plus, X, FolderOpen, Terminal } from "lucide-react";
+import { Plus, X, FolderOpen, Terminal, SquareTerminal } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import { projectsApi, computePathLabels } from "@/lib/api/projects";
 import { settingsApi, providersApi, type AppId } from "@/lib/api";
 import { terminalApi } from "@/lib/api/terminal";
+import { useSettingsQuery } from "@/lib/query";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -38,6 +39,8 @@ export function ProjectScopeList({
   activeApp,
 }: Props) {
   const { t } = useTranslation();
+  const { data: settingsData } = useSettingsQuery();
+  const skipPermissions = settingsData?.openClaudeSkipPermissions ?? false;
   const [projectPaths, setProjectPaths] = useState<string[]>([]);
   const [isAdding, setIsAdding] = useState(false);
   const [confirmRemovePath, setConfirmRemovePath] = useState<string | null>(
@@ -168,7 +171,9 @@ export function ProjectScopeList({
     } catch (err) {
       console.error("[ProjectScopeList] 打开目录失败:", err);
       toast.error(
-        t("projectScope.openFailed", { defaultValue: "无法在资源管理器中打开目录" }),
+        t("projectScope.openFailed", {
+          defaultValue: "无法在资源管理器中打开目录",
+        }),
       );
     }
   };
@@ -179,7 +184,9 @@ export function ProjectScopeList({
     } catch (err) {
       console.error("[ProjectScopeList] 打开全局配置目录失败:", err);
       toast.error(
-        t("projectScope.openFailed", { defaultValue: "无法在资源管理器中打开目录" }),
+        t("projectScope.openFailed", {
+          defaultValue: "无法在资源管理器中打开目录",
+        }),
       );
     }
   };
@@ -194,6 +201,19 @@ export function ProjectScopeList({
       console.error("[ProjectScopeList] 打开终端失败:", err);
       toast.error(
         t("projectScope.terminalOpenFailed", { defaultValue: "打开终端失败" }),
+      );
+    }
+  };
+
+  const handleOpenClaudeCode = async (projectPath: string) => {
+    try {
+      await terminalApi.openClaudeInTerminal(projectPath, skipPermissions);
+    } catch (err) {
+      console.error("[ProjectScopeList] 用 Claude Code 打开失败:", err);
+      toast.error(
+        t("projectScope.openClaudeFailed", {
+          defaultValue: "用 Claude Code 打开失败",
+        }),
       );
     }
   };
@@ -322,6 +342,21 @@ export function ProjectScopeList({
             onClick={(e) => e.stopPropagation()}
             onContextMenu={(e) => e.preventDefault()}
           >
+            {contextMenu.projectPath && (
+              <button
+                type="button"
+                className="relative flex w-full cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground"
+                onClick={() => {
+                  void handleOpenClaudeCode(contextMenu.projectPath!);
+                  setContextMenu(null);
+                }}
+              >
+                <SquareTerminal className="h-4 w-4" />
+                {t("projectScope.openInClaudeCode", {
+                  defaultValue: "用 Claude Code 打开",
+                })}
+              </button>
+            )}
             <button
               type="button"
               className="relative flex w-full cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground"

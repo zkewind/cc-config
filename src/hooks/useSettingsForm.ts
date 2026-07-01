@@ -86,6 +86,7 @@ export function useSettingsForm(): UseSettingsFormResult {
         data.enableClaudePluginIntegration ?? false,
       silentStartup: data.silentStartup ?? false,
       skipClaudeOnboarding: data.skipClaudeOnboarding ?? false,
+      openClaudeSkipPermissions: data.openClaudeSkipPermissions ?? false,
       claudeConfigDir: sanitizeDir(data.claudeConfigDir),
       language: normalizedLanguage,
     };
@@ -106,6 +107,7 @@ export function useSettingsForm(): UseSettingsFormResult {
             useAppWindowControls: false,
             enableClaudePluginIntegration: false,
             skipClaudeOnboarding: false,
+            openClaudeSkipPermissions: false,
             language: readPersistedLanguage(),
           } as SettingsFormState);
 
@@ -143,6 +145,8 @@ export function useSettingsForm(): UseSettingsFormResult {
           serverData.enableClaudePluginIntegration ?? false,
         silentStartup: serverData.silentStartup ?? false,
         skipClaudeOnboarding: serverData.skipClaudeOnboarding ?? false,
+        openClaudeSkipPermissions:
+          serverData.openClaudeSkipPermissions ?? false,
         claudeConfigDir: sanitizeDir(serverData.claudeConfigDir),
         language: normalizedLanguage,
       };

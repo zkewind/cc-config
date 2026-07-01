@@ -551,6 +551,10 @@
         }
       }
     },
+    "openClaude": {
+      "title": "用 Claude Code 打开时跳过权限确认",
+      "description": "开启后，通过项目右键菜单「用 Claude Code 打开」启动时将附带 --dangerously-skip-permissions 参数，跳过所有操作权限确认。有安全风险，请仅在受信任的项目目录中使用。"
+    },
     "configDirectoryOverride": "配置目录覆盖（高级）",
     "configDirectoryDescription": "在 WSL 等环境使用 CLI 工具时，可手动指定为 WSL 里的配置目录，供应商数据与主环境保持一致。",
     "appConfigDir": "CCConfig 配置目录",
