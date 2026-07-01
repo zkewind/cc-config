@@ -1,6 +1,6 @@
 {
   "name": "claude-code-multi-config",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "CCConfig",
   "type": "module",
   "scripts": {
